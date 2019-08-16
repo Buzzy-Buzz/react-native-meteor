@@ -1,4 +1,5 @@
-import { NetInfo, Platform, View } from 'react-native';
+import { Platform, View } from 'react-native';
+import NetInfo from "@react-native-community/netinfo";
 
 import reactMixin from 'react-mixin';
 import Trackr from 'trackr';
@@ -88,19 +89,20 @@ module.exports = {
       ...options,
     });
 
-    NetInfo.isConnected.addEventListener('connectionChange', isConnected => {
-      if (isConnected && Data.ddp.autoReconnect) {
+    NetInfo.addEventListener(({isInternetReachable}) => {
+      if (isInternetReachable && Data.ddp.autoReconnect) {
         Data.ddp.connect();
       }
     });
 
     Data.ddp.on('connected', () => {
       // Clear the collections of any stale data in case this is a reconnect
-      if (Data.db && Data.db.collections) {
-        for (var collection in Data.db.collections) {
-          Data.db[collection].remove({});
-        }
-      }
+      // This could cause unnecessary refresh while rendering so we comment it out - Diwei
+    //   if (Data.db && Data.db.collections) {
+    //     for (var collection in Data.db.collections) {
+    //       Data.db[collection].remove({});
+    //     }
+    //   }
 
       Data.notify('change');
 
@@ -126,66 +128,67 @@ module.exports = {
     });
 
     Data.ddp.on('added', message => {
-      if (!Data.db[message.collection]) {
-        Data.db.addCollection(message.collection);
-      }
-      Data.db[message.collection].upsert({
-        _id: message.id,
-        ...message.fields,
-      });
+        let messageID = message.id;
+        messageID = messageID.charAt(0) === '-' ? messageID.substring(1) : messageID;
+        if (!Data.db[message.collection]) {
+          Data.db.addCollection(message.collection)
+        }
+        Data.db[message.collection].upsert({
+          _id: messageID,
+          ...message.fields
+        });
     });
 
     Data.ddp.on('ready', message => {
-      const idsMap = new Map();
-      for (var i in Data.subscriptions) {
-        const sub = Data.subscriptions[i];
-        idsMap.set(sub.subIdRemember, sub.id);
-      }
-      for (var i in message.subs) {
-        const subId = idsMap.get(message.subs[i]);
-        if (subId) {
-          const sub = Data.subscriptions[subId];
-          sub.ready = true;
-          sub.readyDeps.changed();
-          sub.readyCallback && sub.readyCallback();
+        const idsMap = new Map();
+        for (var i in Data.subscriptions) {
+          const sub = Data.subscriptions[i];
+          idsMap.set(sub.subIdRemember, sub.id);
         }
-      }
+        for (var i in message.subs) {
+          const subId = idsMap.get(message.subs[i]);
+          if (subId) {
+              const sub = Data.subscriptions[subId];
+              sub.ready = true;
+              // sub.readyDeps.changed();
+              sub.readyCallback && sub.readyCallback();
+          }
+        }
     });
 
     Data.ddp.on('changed', message => {
-      const unset = {};
-      if (message.cleared) {
-        message.cleared.forEach(field => {
-          unset[field] = null;
-        });
-      }
-
-      Data.db[message.collection] &&
-        Data.db[message.collection].upsert({
-          _id: message.id,
-          ...message.fields,
-          ...unset,
+        let messageID = message.id;
+        messageID = messageID.charAt(0) === '-' ? messageID.substring(1) : messageID;
+        Data.db[message.collection] && Data.db[message.collection].upsert({
+          _id: messageID,
+          ...message.fields
         });
     });
 
     Data.ddp.on('removed', message => {
-      Data.db[message.collection] &&
-        Data.db[message.collection].del(message.id);
+      let {collection, id} = message;
+      id = id.charAt(0) === '-' ? id.substring(1) : id;
+      const data = Data.db[collection].findOne({_id: id});
+      const pendingSub = Object.values(Data.subscriptions).find(s=> !s.ready);
+      if(data && !pendingSub) Data.db[collection].del(id);
     });
+
     Data.ddp.on('result', message => {
-      const call = Data.calls.find(call => call.id == message.id);
-      if (typeof call.callback == 'function')
-        call.callback(message.error, message.result);
-      Data.calls.splice(Data.calls.findIndex(call => call.id == message.id), 1);
+            let messageID = message.id;
+            messageID = messageID.charAt(0) === '-' ? messageID.substring(1) : messageID;
+            const call = Data.calls.find(call => call.id == messageID);
+            if (typeof call.callback == 'function')
+                call.callback(message.error, message.result);
+            Data.calls.splice(Data.calls.findIndex(call => call.id == messageID), 1);
     });
 
     Data.ddp.on('nosub', message => {
-      for (var i in Data.subscriptions) {
-        const sub = Data.subscriptions[i];
-        if (sub.subIdRemember == message.id) {
-          console.warn('No subscription existing for', sub.name);
-        }
-      }
+        // for(var i in Data.subscriptions) {
+              //   const sub = Data.subscriptions[i];
+              //   if(sub.subIdRemember == message.id) {
+              //     console.warn("No subscription existing for", sub.name);
+              //   }
+              // }
     });
   },
   subscribe(name) {
@@ -260,7 +263,7 @@ module.exports = {
         params: EJSON.clone(params),
         inactive: false,
         ready: false,
-        readyDeps: new Trackr.Dependency(),
+        readyDeps: new Trackr.Dependency,
         readyCallback: callbacks.onReady,
         stopCallback: callbacks.onStop,
         stop: function() {
@@ -273,7 +276,21 @@ module.exports = {
           }
         },
       };
+
     }
+
+    Data.subscriptions[id].readyDeps = new Trackr.Dependency;
+    Data.subscriptions[id].readyCallback = callbacks.onReady;
+    Data.subscriptions[id].stopCallback = callbacks.onStop;
+    Data.subscriptions[id].stop = function() {
+      Data.ddp.unsub(this.subIdRemember);
+      delete Data.subscriptions[this.id];
+      this.ready && this.readyDeps.changed();
+
+      if (callbacks.onStop) {
+          callbacks.onStop();
+      }
+    };
 
     // return a handle to the application.
     var handle = {

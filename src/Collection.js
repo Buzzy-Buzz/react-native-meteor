@@ -135,15 +135,15 @@ export class Collection {
     // change mini mongo for optimize UI changes
     this._collection.upsert({ _id: id, ...modifier.$set });
 
-    Data.waitDdpConnected(() => {
-      call(`/${this._name}/update`, { _id: id }, modifier, err => {
-        if (err) {
-          return callback(err);
-        }
-
-        callback(null, id);
-      });
-    });
+    // Data.waitDdpConnected(() => {
+    //   call(`/${this._name}/update`, { _id: id }, modifier, err => {
+    //     if (err) {
+    //       return callback(err);
+    //     }
+    //
+    //     callback(null, id);
+    //   });
+    // });
   }
 
   remove(id, callback = () => {}) {
