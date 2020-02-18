@@ -40,13 +40,14 @@ const ReactMeteorData = {
         // See https://github.com/facebook/react/issues/3398.
         this.props = nextProps;
         this.state = nextState;
-        newData = this._meteorDataManager.calculateData();
+        if (this._meteorDataManager)
+          newData = this._meteorDataManager.calculateData();
       } finally {
         this.props = saveProps;
         this.state = saveState;
       }
-
-      this._meteorDataManager.updateData(newData);
+      if (this._meteorDataManager && newData)
+        this._meteorDataManager.updateData(newData);
     }
   },
 
