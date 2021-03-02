@@ -33,6 +33,8 @@
   },
   "homepage": "https://github.com/inProgress-team/react-native-meteor#readme",
   "dependencies": {
+    "@react-native-async-storage/async-storage": "github:react-native-async-storage/async-storage",
+    "@react-native-community/netinfo": "4.1.3",
     "base-64": "^0.1.0",
     "crypto-js": "^3.1.6",
     "ejson": "^2.1.2",
@@ -42,9 +44,7 @@
     "react-mixin": "^3.0.3",
     "trackr": "^2.0.2",
     "underscore": "^1.8.3",
-    "wolfy87-eventemitter": "^4.3.0",
-    "@react-native-community/netinfo": "4.1.3",
-    "@react-native-community/async-storage": "1.6.1"
+    "wolfy87-eventemitter": "^4.3.0"
   },
   "devDependencies": {
     "babel-core": "^6.7.2",
